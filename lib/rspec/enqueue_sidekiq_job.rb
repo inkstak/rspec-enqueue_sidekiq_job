@@ -34,12 +34,15 @@ module RSpec
         @expected_count = nil
       end
 
-      def with(*expected_arguments)
-        if expected_arguments.last.is_a?(Hash)
-          options = expected_arguments.pop
-          expected_arguments.push(options.with_indifferent_access)
+      def with(*expected_arguments, &block)
+        if block
+          raise ArgumentError, "setting arguments with block is not supported" if expected_arguments.any?
+
+          @expected_arguments = block
+        else
+          @expected_arguments = normalize_arguments(expected_arguments)
         end
-        @expected_arguments = expected_arguments
+
         self
       end
 
@@ -122,9 +125,26 @@ module RSpec
 
       private
 
+      def normalize_arguments(arguments)
+        if arguments.last.is_a?(Hash)
+          options = arguments.pop
+          arguments.push(options.with_indifferent_access)
+        end
+
+        arguments
+      end
+
       def enqueued_in_block(block)
         before = @worker_class.jobs.dup
-        block.call
+        result = block.call
+
+        if @expected_arguments.is_a?(Proc)
+          arguments = @expected_arguments.call(result)
+          raise "`with` block is expected to return an Array" unless arguments.is_a?(Array)
+
+          @expected_arguments = normalize_arguments(arguments)
+        end
+
         @actual_jobs      = @worker_class.jobs - before
         @actual_arguments = @actual_jobs.map { |job| job['args'] }
         @actual_schedules = @actual_jobs.map { |job| job['at'] }
