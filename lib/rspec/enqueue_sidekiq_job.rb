@@ -83,18 +83,28 @@ module RSpec
       def failure_message
         message = ["expected to enqueue #{worker_class} job"]
         message << "  arguments: #{expected_arguments}" if expected_arguments
-        message << "  in: #{expected_in.inspect}" if expected_in
+        message << "  in: #{output_expected_in}" if expected_in
         message << "  at: #{expected_at}" if expected_at
         message << "  exactly #{expected_count} times" if expected_count
+        if @actual_jobs.empty?
+          message << "no #{worker_class} found"
+        else
+          message << "found"
+          message << "  arguments: #{output_actual_arguments}"
+          message << "  at: #{output_actual_schedules}" if expected_at || expected_in
+        end
         message.join("\n")
       end
 
       def failure_message_when_negated
         message = ["expected not to enqueue #{worker_class} job"]
         message << "  arguments: #{expected_arguments}" if expected_arguments
-        message << "  in: #{expected_in.inspect}" if expected_in
+        message << "  in: #{output_expected_in}" if expected_in
         message << "  at: #{expected_at}" if expected_at
         message << "  exactly #{expected_count} times" if expected_count
+        message << "found"
+        message << "  arguments: #{output_actual_arguments}"
+        message << "  at: #{output_actual_schedules}" if expected_at || expected_in
         message.join("\n")
       end
 
@@ -111,7 +121,10 @@ module RSpec
       def enqueued_in_block(block)
         before = @worker_class.jobs.dup
         block.call
-        @worker_class.jobs - before
+        @actual_jobs      = @worker_class.jobs - before
+        @actual_arguments = @actual_jobs.map { |job| job['args'] }
+        @actual_schedules = @actual_jobs.map { |job| job['at'] }
+        @actual_jobs
       end
 
       def filter(jobs)
@@ -137,7 +150,20 @@ module RSpec
         return false if actual.nil?
 
         actual_time = Time.at(actual)
-        expected_in.from_now.to_i == actual_time.to_i
+        @expected_in_time = expected_in.from_now
+        @expected_in_time.to_i == actual_time.to_i
+      end
+
+      def output_expected_in
+        "#{expected_in.inspect} (#{@expected_in_time})"
+      end
+
+      def output_actual_schedules
+        @actual_schedules.map { |at| (at && Time.at(at.to_i)).inspect }.join(', ')
+      end
+
+      def output_actual_arguments
+        @actual_arguments.map(&:inspect).join(', ')
       end
 
       attr_reader :worker_class, :expected_arguments, :expected_at, :expected_in, :expected_count
