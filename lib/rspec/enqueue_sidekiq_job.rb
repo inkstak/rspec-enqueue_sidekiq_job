@@ -87,6 +87,20 @@ module RSpec
         filter(enqueued_in_block(block)).none?
       end
 
+      def description
+        description = "enqueue #{worker_class} job"
+        description +=
+          if !expected_count || expected_count == 1
+            " once"
+          elsif expected_count == 2
+            " twice"
+          else
+            " #{expected_count} times"
+          end
+
+        description
+      end
+
       def failure_message
         message = ["expected to enqueue #{worker_class} job"]
         message << "  arguments: #{expected_arguments}" if expected_arguments
